@@ -15,7 +15,7 @@ mod models;
 async fn main() {
     let matches = App::new("CSV to Gremlin importer")
         .version("1.0")
-        .author("Stephen")
+        .author("Davi Suga")
         .about("Imports CSV data into Gremlin graph database")
         .subcommand(
             SubCommand::with_name("nodes")
@@ -61,12 +61,15 @@ async fn main() {
 
     if let Some(sub_matches) = matches.subcommand_matches("nodes") {
         let file_path = sub_matches.value_of("file").unwrap();
-        let nodes: Vec<Node> = read_csv(file_path).await?;
-        import_nodes(config, nodes).await?;
+        let headers = sub_matches.value_of("headers");
+        let nodes: Vec<Node> = read_csv(file_path, headers).unwrap();
+        import_nodes(&config, &nodes).await.unwrap();
     } else if let Some(sub_matches) = matches.subcommand_matches("edges") {
         let file_path = sub_matches.value_of("file").unwrap();
-        let edges: Vec<Edge> = read_csv(file_path).await?;
-        import_edges(config, edges).await?;
+        let headers = sub_matches.value_of("headers");
+
+        let edges: Vec<Edge> = read_csv(file_path, headers).unwrap();
+        import_edges(&config, &edges).await.unwrap();
     }
     ()
 }
