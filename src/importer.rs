@@ -1,3 +1,5 @@
+use std::println;
+
 // importer.rs
 use crate::models::{
     config::Config,
@@ -9,11 +11,12 @@ pub async fn import_nodes(
     config: &Config,
     nodes: &[Node],
 ) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Importing nodes");
     let client = GremlinClient::connect(config.hosts[0].as_str()).await?;
     let g = traversal().with_remote_async(client);
-
+    println!("Connected to {}", config.hosts[0]);
     for node in nodes {
-        let mut traversal = g.add_v(node.label.as_str());
+        let mut traversal = g.add_v(node.label.as_str()).property("partitionKey", "pk");
 
         for (key, value) in &node.properties {
             traversal = traversal.property(key.as_str(), value.as_str());
@@ -34,6 +37,7 @@ pub async fn import_edges(config: &Config, edges: &[Edge]) -> Result<(), Box<Gre
         let to_vertex: Vertex = g.v(edge.to.as_str().to_owned()).next().await?.unwrap();
         let _e = g
             .add_e(edge.relationship.as_str())
+            .property("partitionKey", "pk")
             .from(&from_vertex)
             .to(&to_vertex)
             .iter()

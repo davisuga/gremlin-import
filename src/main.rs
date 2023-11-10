@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
-use std::process;
+use std::{println, process};
 
 mod importer;
 mod models;
@@ -21,16 +21,14 @@ async fn main() {
             SubCommand::with_name("nodes")
                 .about("Imports CSV data as nodes")
                 .arg(
-                    Arg::with_name("CONFIG")
+                    Arg::with_name("config")
                         .help("Sets the config file to use")
-                        .required(true)
-                        .index(1),
+                        .required(true),
                 )
                 .arg(
-                    Arg::with_name("CSV")
+                    Arg::with_name("csv")
                         .help("Sets the CSV file to import")
-                        .required(true)
-                        .index(2),
+                        .required(true),
                 )
                 .arg(
                     Arg::with_name("headers")
@@ -42,13 +40,13 @@ async fn main() {
             SubCommand::with_name("edges")
                 .about("Imports CSV data as edges")
                 .arg(
-                    Arg::with_name("CONFIG")
+                    Arg::with_name("config")
                         .help("Sets the config file to use")
                         .required(true)
                         .index(1),
                 )
                 .arg(
-                    Arg::with_name("CSV")
+                    Arg::with_name("csv")
                         .help("Sets the CSV file to import")
                         .required(true)
                         .index(2),
@@ -56,19 +54,38 @@ async fn main() {
         )
         .get_matches();
 
-    let config_file = matches.value_of("config").unwrap();
-    let config: Config = read_config(config_file).unwrap();
-
     if let Some(sub_matches) = matches.subcommand_matches("nodes") {
-        let file_path = sub_matches.value_of("file").unwrap();
+        let config_file = sub_matches.value_of("config").unwrap();
+        let config: Config = read_config(config_file).unwrap();
+        println!("Importing nodes");
+        let file_path = sub_matches.value_of("csv").unwrap();
+        println!("Reading CSV file from {}", file_path);
         let headers = sub_matches.value_of("headers");
-        let nodes: Vec<Node> = read_csv(file_path, headers).unwrap();
+        println!("Headers: {:?}", headers);
+        let csv_lines: Vec<HashMap<String, String>> = read_csv(file_path, headers).unwrap();
+        let nodes = csv_lines
+            .iter()
+            .map(|line| Node {
+                properties: line.clone(),
+                label: "person".to_owned(),
+            })
+            .collect::<Vec<_>>();
         import_nodes(&config, &nodes).await.unwrap();
     } else if let Some(sub_matches) = matches.subcommand_matches("edges") {
-        let file_path = sub_matches.value_of("file").unwrap();
+        let config_file = sub_matches.value_of("config").unwrap();
+        let config: Config = read_config(config_file).unwrap();
+        let file_path = sub_matches.value_of("csv").unwrap();
         let headers = sub_matches.value_of("headers");
 
-        let edges: Vec<Edge> = read_csv(file_path, headers).unwrap();
+        let csv_lines: Vec<HashMap<String, String>> = read_csv(file_path, headers).unwrap();
+        let edges = csv_lines
+            .iter()
+            .map(|line| Edge {
+                from: line.get("from").unwrap().to_owned(),
+                to: line.get("to").unwrap().to_owned(),
+                relationship: line.get("relationship").unwrap().to_owned(),
+            })
+            .collect::<Vec<_>>();
         import_edges(&config, &edges).await.unwrap();
     }
     ()
@@ -81,7 +98,7 @@ fn read_config<T: for<'de> Deserialize<'de>>(file_path: &str) -> Result<T, Box<d
     Ok(t)
 }
 
-fn read_csv<T: for<'de> Deserialize<'de>>(
+fn read_csv<T: for<'de> Deserialize<'de> + std::fmt::Debug>(
     file_path: &str,
     headers: Option<&str>,
 ) -> Result<Vec<T>, Box<dyn Error>> {
@@ -91,6 +108,7 @@ fn read_csv<T: for<'de> Deserialize<'de>>(
     if let Some(h) = headers {
         rdr.set_headers(csv::StringRecord::from(h.split(',').collect::<Vec<_>>()));
     }
+
     let mut records = Vec::new();
     for result in rdr.deserialize() {
         let record: T = result?;
